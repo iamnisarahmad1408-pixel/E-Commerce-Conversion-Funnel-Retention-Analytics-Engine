@@ -1,0 +1,34 @@
+-- Description: Utilizes window functions to compute 1-day, 7-day, and 30-day cohort retention
+-- Source Table: bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*
+
+CREATE OR REPLACE VIEW `ecommerce-portfolio-analytics.ecommerce_analytics.vw_user_retention` AS
+WITH user_first_touch AS (
+  SELECT
+    user_pseudo_id,
+    MIN(PARSE_DATE('%Y%m%d', event_date)) AS cohort_date
+  FROM
+    `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`
+  GROUP BY
+    user_pseudo_id
+),
+activity AS (
+  SELECT
+    e.user_pseudo_id,
+    f.cohort_date,
+    PARSE_DATE('%Y%m%d', e.event_date) AS activity_date,
+    DATE_DIFF(PARSE_DATE('%Y%m%d', e.event_date), f.cohort_date, DAY) AS days_since_first_visit
+  FROM
+    `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` e
+  JOIN
+    user_first_touch f ON e.user_pseudo_id = f.user_pseudo_id
+)
+SELECT
+  cohort_date,
+  COUNT(DISTINCT user_pseudo_id) AS total_cohort_users,
+  COUNT(DISTINCT CASE WHEN days_since_first_visit = 1 THEN user_pseudo_id END) AS day_1_retained,
+  COUNT(DISTINCT CASE WHEN days_since_first_visit = 7 THEN user_pseudo_id END) AS day_7_retained,
+  COUNT(DISTINCT CASE WHEN days_since_first_visit = 30 THEN user_pseudo_id END) AS day_30_retained
+FROM
+  activity
+GROUP BY
+  1;
